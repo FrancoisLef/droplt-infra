@@ -1,0 +1,240 @@
+version: "3"
+
+services:
+  ###
+  # Traefik
+  ###
+  traefik:
+    image: traefik:v2.5
+    container_name: traefik
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/config/:/etc/traefik/config/:ro
+      - traefik_ssl:/letsencrypt
+    ports:
+      - 80:80
+      - 443:443
+      - 1194:1194/udp # OpenVPN
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.${BASE_HOST}`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure,web"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.tls=true"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik.middlewares=SecHeader@file,ProxyHostHeader@file,auth"
+      - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_AUTH}"
+
+  ###
+  # PostgreSQL
+  ###
+  db:
+    image: postgres:alpine
+    container_name: db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - ./postgresql/data:/var/lib/postgresql/data
+    networks:
+      - lan
+
+  ###
+  # File server
+  ###
+  h5ai:
+    image: clue/h5ai
+    container_name: h5ai
+    restart: unless-stopped
+    volumes:
+      - ./downloads/:/var/www
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.h5ai.rule=Host(`files.${BASE_HOST}`)"
+      - "traefik.http.routers.h5ai.entrypoints=websecure,web"
+      - "traefik.http.routers.h5ai.tls=true"
+      - "traefik.http.routers.h5ai.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.h5ai.middlewares=SecHeader@file,H5aiHeader@file,auth"
+      - "traefik.http.middlewares.auth.basicauth.users=${H5AI_AUTH}"
+
+  ###
+  # Whoami
+  ###
+  whoami:
+    image: containous/whoami
+    container_name: whoami
+    restart: unless-stopped
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`${BASE_HOST}`)"
+      - "traefik.http.routers.whoami.entrypoints=websecure,web"
+      - "traefik.http.routers.whoami.tls=true"
+      - "traefik.http.routers.whoami.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.whoami.middlewares=SecHeader@file,HostHeader@file"
+
+  ###
+  # Transmission
+  ###
+  transmission:
+    image: linuxserver/transmission:latest
+    container_name: transmission
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=Europe/Paris
+      - USER=${BT_USER}
+      - PASS=${BT_PASSWORD}
+    volumes:
+      - ./downloads:/downloads:rw
+      - ./transmission/config:/config:rw
+      - ./transmission/watch:/watch:ro
+    ports:
+      - 51413:51413
+      - 51413:51413/udp
+    networks:
+      - traefik
+      - lan
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.transmission.rule=Host(`transmission.${BASE_HOST}`)"
+      - "traefik.http.services.transmission.loadbalancer.server.port=9091"
+      - "traefik.http.routers.transmission.entrypoints=websecure,web"
+      - "traefik.http.routers.transmission.tls=true"
+      - "traefik.http.routers.transmission.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.transmission.middlewares=SecHeader@file,TransmissionHeader@file"
+
+  ###
+  # Filebot
+  ###
+  filebot:
+    image: jlesage/filebot:latest
+    container_name: filebot
+    restart: unless-stopped
+    environment:
+      - USER_ID=${PUID}
+      - GROUP_ID=${PGID}
+      - TZ=Europe/Paris
+      - AMC_INPUT_DIR=/downloads/complete
+      - AMC_OUTPUT_DIR=/downloads/sorted
+      - AMC_ACTION=symlink
+      - AMC_INTERVAL=30
+      - AMC_PROCESS_MUSIC=f
+    volumes:
+      - ./filebot/config:/config
+      - ./downloads:/downloads
+
+  ###
+  # Plex
+  ###
+  plex:
+    image: plexinc/pms-docker
+    container_name: plex
+    restart: unless-stopped
+    hostname: mewtwo
+    environment:
+      - PLEX_UID=${PUID}
+      - PLEX_GID=${PGID}
+      - TZ=Europe/Paris
+      - PLEX_CLAIM=${PLEX_CLAIM}
+      - ADVERTISE_IP=${PLEX_ADVERTISE_IP}
+    volumes:
+      - ./plex/config:/config:rw
+      - ./plex/transcode:/transcode:rw
+      - ./downloads:/data:ro
+    ports:
+      - 32400:32400/tcp
+      - 3005:3005/tcp
+      - 8324:8324/tcp
+      - 32469:32469/tcp
+      - 1900:1900/udp
+      - 32410:32410/udp
+      - 32412:32412/udp
+      - 32413:32413/udp
+      - 32414:32414/udp
+    networks:
+      - traefik
+
+  ###
+  # Jackett
+  ###
+  jackett:
+    image: linuxserver/jackett:latest
+    container_name: jackett
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=Europe/Paris
+      - AUTO_UPDATE=true
+    volumes:
+      - ./jackett/config:/config:rw
+      - ./transmission/watch:/downloads:rw
+    networks:
+      - traefik
+      - lan
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jackett.rule=Host(`jackett.${BASE_HOST}`)"
+      - "traefik.http.services.jackett.loadbalancer.server.port=9117"
+      - "traefik.http.routers.jackett.entrypoints=websecure,web"
+      - "traefik.http.routers.jackett.tls=true"
+      - "traefik.http.routers.jackett.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.jackett.middlewares=JackettHeader@file"
+
+  ###
+  # FlareSolverr
+  ###
+  flaresolverr:
+    image: flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Paris
+      - LOG_LEVEL=info
+      - LOG_HTML=false
+      - CAPTCHA_SOLVER=none
+    ports:
+      - 8191:8191
+    networks:
+      - lan
+
+  ###
+  # OpenVPN
+  ###
+  openvpn:
+    build: ./vpn/repository
+    image: local/openvpn
+    container_name: openvpn
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - ./vpn/data:/etc/openvpn:rw
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.udp.services.openvpn.loadBalancer.server.port=1194"
+      - "traefik.udp.routers.openvpn.service=openvpn"
+      - "traefik.udp.routers.openvpn.entrypoints=openvpn"
+
+volumes:
+  traefik_ssl:
+    name: traefik_ssl
+
+networks:
+  lan:
+    name: lan
+  traefik:
+    name: traefik

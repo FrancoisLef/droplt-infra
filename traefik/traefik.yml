@@ -1,0 +1,31 @@
+api: true
+
+providers:
+  docker:
+    endpoint: unix:///var/run/docker.sock
+    exposedByDefault: false
+    network: traefik
+  file:
+    directory: /etc/traefik/config/
+    watch: true
+
+entryPoints:
+  web:
+    address: :80
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: :443
+  openvpn:
+    address: :1194/udp
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "email@address.fr"
+      storage: "/letsencrypt/acme.json"
+      httpChallenge:
+        entryPoint: web
