@@ -30,11 +30,35 @@ services:
       - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_AUTH}"
 
   ###
+  # Droplt - App
+  ###
+  app:
+    image: droplt/app:latest
+    container_name: app
+    restart: unless-stopped
+    environment:
+      - FIREBASE_API_KEY=${FIREBASE_API_KEY}
+      - FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET}
+      - FIREBASE_MESSAGING_SENDER_ID=${FIREBASE_MESSAGING_SENDER_ID}
+      - FIREBASE_APP_ID=${FIREBASE_APP_ID}
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.rule=Host(`${BASE_HOST}`)"
+      - "traefik.http.routers.app.entrypoints=websecure,web"
+      - "traefik.http.routers.app.tls=true"
+      - "traefik.http.routers.app.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.app.middlewares=SecHeader@file,HostHeader@file"
+
+  ###
   # PostgreSQL
   ###
-  db:
+  postgresql:
     image: postgres:alpine
-    container_name: db
+    container_name: postgresql
     restart: unless-stopped
     environment:
       - POSTGRES_USER=${DB_USER}
@@ -64,23 +88,6 @@ services:
       - "traefik.http.routers.h5ai.tls.certresolver=letsencrypt"
       - "traefik.http.routers.h5ai.middlewares=SecHeader@file,H5aiHeader@file,auth"
       - "traefik.http.middlewares.auth.basicauth.users=${H5AI_AUTH}"
-
-  ###
-  # Whoami
-  ###
-  whoami:
-    image: containous/whoami
-    container_name: whoami
-    restart: unless-stopped
-    networks:
-      - traefik
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.whoami.rule=Host(`${BASE_HOST}`)"
-      - "traefik.http.routers.whoami.entrypoints=websecure,web"
-      - "traefik.http.routers.whoami.tls=true"
-      - "traefik.http.routers.whoami.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.whoami.middlewares=SecHeader@file,HostHeader@file"
 
   ###
   # Transmission
