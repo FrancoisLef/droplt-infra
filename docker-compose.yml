@@ -30,19 +30,14 @@ services:
       - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_AUTH}"
 
   ###
-  # Droplt - App
+  # App - production
   ###
   app:
-    image: droplt/app:latest
-    container_name: app
+    image: droplt/app:stable
+    container_name: production-app
     restart: unless-stopped
-    environment:
-      - FIREBASE_API_KEY=${FIREBASE_API_KEY}
-      - FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN}
-      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
-      - FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET}
-      - FIREBASE_MESSAGING_SENDER_ID=${FIREBASE_MESSAGING_SENDER_ID}
-      - FIREBASE_APP_ID=${FIREBASE_APP_ID}
+    env_file:
+      - droplt-app-production.env
     networks:
       - traefik
     labels:
@@ -54,20 +49,76 @@ services:
       - "traefik.http.routers.app.middlewares=SecHeader@file,HostHeader@file"
 
   ###
-  # PostgreSQL
+  # App - staging
+  ###
+  app-staging:
+    image: droplt/app:staging
+    container_name: staging-app
+    restart: unless-stopped
+    env_file:
+      - droplt-app-staging.env
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app-staging.rule=Host(`staging.${BASE_HOST}`)"
+      - "traefik.http.routers.app-staging.entrypoints=websecure,web"
+      - "traefik.http.routers.app-staging.tls=true"
+      - "traefik.http.routers.app-staging.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.app-staging.middlewares=SecHeader@file,StagingHeader@file"
+
+  ###
+  # PostgreSQL - production
   ###
   postgresql:
     image: postgres:alpine
-    container_name: postgresql
+    container_name: production-postgresql
     restart: unless-stopped
-    environment:
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=${DB_NAME}
+    env_file:
+      - droplt-db-production.env
     volumes:
-      - ./postgresql/data:/var/lib/postgresql/data
+      - ./postgresql/production:/var/lib/postgresql/data
     networks:
       - lan
+
+  ###
+  # PostgreSQL - staging
+  ###
+  postgresql-staging:
+    image: postgres:alpine
+    container_name: staging-postgresql
+    restart: unless-stopped
+    env_file:
+      - droplt-db-staging.env
+    volumes:
+      - ./postgresql/staging:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+    networks:
+      - lan
+      - traefik
+
+  ###
+  # Adminer
+  ###
+  adminer:
+    image: adminer
+    container_name: adminer
+    restart: unless-stopped
+    depends_on:
+      - postgresql
+    networks:
+      - traefik
+      - lan
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.adminer.rule=Host(`adminer.${BASE_HOST}`)"
+      - "traefik.http.services.adminer.loadbalancer.server.port=8080"
+      - "traefik.http.routers.adminer.entrypoints=websecure,web"
+      - "traefik.http.routers.adminer.tls=true"
+      - "traefik.http.routers.adminer.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.adminer.middlewares=SecHeader@file,AdminerHeader@file"
+      - "traefik.http.middlewares.auth.basicauth.users=${ADMINER_AUTH}"
 
   ###
   # File server

@@ -16,12 +16,18 @@ http:
     HostHeader:
       headers:
         sslHost: 'host.com'
+    StagingHeader:
+      headers:
+        sslHost: 'staging.host.com'
     TransmissionHeader:
       headers:
         sslHost: 'transmission.host.com'
     H5aiHeader:
       headers:
         sslHost: 'files.host.com'
+    AdminerHeader:
+      headers:
+        sslHost: 'adminer.host.com'
     JackettHeader:
       headers:
         sslHost: 'jackett.host.com'

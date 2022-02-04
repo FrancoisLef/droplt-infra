@@ -1,12 +1,37 @@
+###
+# Helpers
+###
 alias c="clear"
 alias l="ls -FGlAhph"
 alias dc="docker"
 alias dcc="docker-compose"
 
-function dccRestart {
-	docker-compose down --remove-orphans && docker-compose up -d
+###
+# Docker-compose functions
+###
+function dccdown {
+	docker-compose down --remove-orphans
 }
 
+function dccstop {
+	docker-compose stop $1
+}
+
+function dccstart {
+	docker-compose up --remove-orphans -d $1
+}
+
+function dccupdate {
+	docker-compose pull $1
+}
+
+function dccrestart {
+	docker-compose up --remove-orphans --force-recreate -d $1
+}
+
+###
+# VPN functions
+###
 function vpnStart {
 	docker-compose up -d openvpn
 }
@@ -28,6 +53,9 @@ function vpnRemoveUser {
 	docker-compose run --rm openvpn ovpn_revokeclient $1 remove
 }
 
+###
+# HTpasswd functions
+###
 function htpasswd {
 	docker run --rm --name apache httpd:alpine htpasswd -nb $1 $2
 }
