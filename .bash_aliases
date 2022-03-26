@@ -29,6 +29,10 @@ function dccrestart {
 	docker-compose up --remove-orphans --force-recreate -d $1
 }
 
+function dcclogs {
+	docker-compose logs -f $1
+}
+
 ###
 # VPN functions
 ###

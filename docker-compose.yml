@@ -30,14 +30,14 @@ services:
       - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_AUTH}"
 
   ###
-  # App - production
+  # App
   ###
   app:
     image: droplt/app:stable
-    container_name: production-app
+    container_name: droplt-app
     restart: unless-stopped
     env_file:
-      - droplt-app-production.env
+      - droplt-app.env
     networks:
       - traefik
     labels:
@@ -49,76 +49,28 @@ services:
       - "traefik.http.routers.app.middlewares=SecHeader@file,HostHeader@file"
 
   ###
-  # App - staging
+  # Server
   ###
-  app-staging:
-    image: droplt/app:staging
-    container_name: staging-app
-    restart: unless-stopped
-    env_file:
-      - droplt-app-staging.env
-    networks:
-      - traefik
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.app-staging.rule=Host(`staging.${BASE_HOST}`)"
-      - "traefik.http.routers.app-staging.entrypoints=websecure,web"
-      - "traefik.http.routers.app-staging.tls=true"
-      - "traefik.http.routers.app-staging.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.app-staging.middlewares=SecHeader@file,StagingHeader@file"
-
-  ###
-  # PostgreSQL - production
-  ###
-  postgresql:
-    image: postgres:alpine
-    container_name: production-postgresql
-    restart: unless-stopped
-    env_file:
-      - droplt-db-production.env
-    volumes:
-      - ./postgresql/production:/var/lib/postgresql/data
-    networks:
-      - lan
-
-  ###
-  # PostgreSQL - staging
-  ###
-  postgresql-staging:
-    image: postgres:alpine
-    container_name: staging-postgresql
-    restart: unless-stopped
-    env_file:
-      - droplt-db-staging.env
-    volumes:
-      - ./postgresql/staging:/var/lib/postgresql/data
-    ports:
-      - 5432:5432
-    networks:
-      - lan
-      - traefik
-
-  ###
-  # Adminer
-  ###
-  adminer:
-    image: adminer
-    container_name: adminer
-    restart: unless-stopped
+  server:
+    image: droplt/server:stable
+    container_name: droplt-server
     depends_on:
-      - postgresql
+      - transmission
+    restart: unless-stopped
+    volumes:
+      - ./firebase.json:/firebase.json
+    env_file:
+      - droplt-server.env
     networks:
       - traefik
-      - lan
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.adminer.rule=Host(`adminer.${BASE_HOST}`)"
-      - "traefik.http.services.adminer.loadbalancer.server.port=8080"
-      - "traefik.http.routers.adminer.entrypoints=websecure,web"
-      - "traefik.http.routers.adminer.tls=true"
-      - "traefik.http.routers.adminer.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.adminer.middlewares=SecHeader@file,AdminerHeader@file"
-      - "traefik.http.middlewares.auth.basicauth.users=${ADMINER_AUTH}"
+      - "traefik.http.routers.server.rule=Host(`api.${BASE_HOST}`)"
+      - "traefik.http.services.server.loadbalancer.server.port=4000"
+      - "traefik.http.routers.server.entrypoints=websecure,web"
+      - "traefik.http.routers.server.tls=true"
+      - "traefik.http.routers.server.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.server.middlewares=SecHeader@file,ApiHeader@file"
 
   ###
   # File server
@@ -199,7 +151,7 @@ services:
     image: plexinc/pms-docker
     container_name: plex
     restart: unless-stopped
-    hostname: mewtwo
+    hostname: ronflex
     environment:
       - PLEX_UID=${PUID}
       - PLEX_GID=${PGID}
@@ -207,7 +159,7 @@ services:
       - PLEX_CLAIM=${PLEX_CLAIM}
       - ADVERTISE_IP=${PLEX_ADVERTISE_IP}
     volumes:
-      - ./plex/config:/config:rw
+      - ./plex/config/ronflex:/config:rw
       - ./plex/transcode:/transcode:rw
       - ./downloads:/data:ro
     ports:
